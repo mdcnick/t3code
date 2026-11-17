@@ -1,7 +1,7 @@
 import type { ServerProviderSkill } from "@t3tools/contracts";
 import { resolveProviderSkillSourceKind } from "@t3tools/client-runtime/providerSkills";
 import { formatProviderSkillDisplayName } from "@t3tools/shared/inlineSkills";
-import { SparklesIcon } from "lucide-react";
+import { BlocksIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { searchProviderSkills } from "../../providerSkillSearch";
@@ -16,6 +16,7 @@ import {
   ComboboxSearchInput,
   ComboboxTrigger,
 } from "../ui/combobox";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { SkillSourceBadge } from "./ComposerCommandMenu";
 import { composerSkillNames, pendingComposerSkills } from "./composerSkillPicker.logic";
 import { composerFloatingLayerProps } from "./composerEventScope";
@@ -79,7 +80,7 @@ export function ComposerSkillPicker({
         }
         title="Choose skills for this message"
       >
-        <SparklesIcon aria-hidden="true" />
+        <BlocksIcon aria-hidden="true" />
         Skills{existingNames.length > 0 ? ` (${existingNames.length})` : ""}
       </ComboboxTrigger>
       <ComboboxPopup
@@ -89,7 +90,7 @@ export function ComposerSkillPicker({
         finalFocus={() => (addedRef.current ? false : triggerRef.current)}
         side="top"
         align="start"
-        className="w-96"
+        className="w-96 max-w-[calc(100vw-1rem)]"
       >
         <div className="shrink-0 px-3 pt-3">
           <h2 className="text-sm font-medium">Skills for this message</h2>
@@ -122,26 +123,36 @@ export function ComposerSkillPicker({
                   <CheckboxMark checked={selected.includes(skill.name)} />
                   <div className="min-w-0 flex-1 py-1">
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate font-medium" title={label}>
-                        {label}
-                      </span>
-                      <span className="ms-auto shrink-0" title={skill.path}>
-                        <SkillSourceBadge
-                          kind={resolveProviderSkillSourceKind(skill)}
-                          showSkillSuffix={false}
-                        />
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger render={<span className="truncate font-medium" />}>
+                          {label}
+                        </TooltipTrigger>
+                        <TooltipPopup side="top">{label}</TooltipPopup>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger render={<span className="ms-auto shrink-0" />}>
+                          <SkillSourceBadge
+                            kind={resolveProviderSkillSourceKind(skill)}
+                            showSkillSuffix={false}
+                          />
+                        </TooltipTrigger>
+                        <TooltipPopup side="top">{skill.path}</TooltipPopup>
+                      </Tooltip>
                     </div>
                     {label !== skill.name ? (
                       <p className="truncate text-xs text-muted-foreground">${skill.name}</p>
                     ) : null}
                     {description ? (
-                      <p
-                        className="mt-0.5 line-clamp-2 text-xs text-muted-foreground"
-                        title={description}
-                      >
-                        {description}
-                      </p>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground" />
+                          }
+                        >
+                          {description}
+                        </TooltipTrigger>
+                        <TooltipPopup side="top">{description}</TooltipPopup>
+                      </Tooltip>
                     ) : null}
                     {inPrompt ? (
                       <p className="mt-0.5 text-xs text-muted-foreground">In prompt</p>

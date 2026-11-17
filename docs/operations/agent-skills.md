@@ -20,8 +20,10 @@ to disable the bridge. Configuration contains no credentials and is never read f
 a project file or the connecting browser. Linked environments need their own setup.
 
 Only a `.agent-skills.json` directly in the provider's working directory opts in.
-Worktrees need their own manifest; the bridge does not search parent directories or
-copy a selection from the original checkout. The manager receives
+Treat that manifest and every selected skill bundle as executable project instructions:
+enable the bridge only for projects and skill sources you trust. Worktrees need their own
+manifest; the bridge does not search parent directories or copy a selection from the
+original checkout. The manager receives
 `apply --project <canonical-working-directory> --harness <mode>`, with that same cwd.
 It alone owns inventory resolution, collision checks, managed links, Codex rules,
 transaction records, and rollback.
