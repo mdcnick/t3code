@@ -24,12 +24,16 @@ describe("composer skill picker", () => {
   it("dedupes selections, keeping the first invocable definition and canonical name", () => {
     const first = skill("review", { path: "/project/review/SKILL.md" });
     expect(
-      pendingComposerSkills("", [" REVIEW ", "review", "design", "missing"], [
-        skill("review", { enabled: false }),
-        first,
-        skill("REVIEW", { path: "/personal/review/SKILL.md" }),
-        skill("design", { userInvocable: false }),
-      ]),
+      pendingComposerSkills(
+        "",
+        [" REVIEW ", "review", "design", "missing"],
+        [
+          skill("review", { enabled: false }),
+          first,
+          skill("REVIEW", { path: "/personal/review/SKILL.md" }),
+          skill("design", { userInvocable: false }),
+        ],
+      ),
     ).toEqual([first]);
   });
 
