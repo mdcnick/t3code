@@ -287,6 +287,8 @@ import {
   usePreparingComposerImages,
 } from "./preparingComposerImages";
 import { ComposerControlsBar } from "./ComposerControlsBar";
+import { ComposerSkillPicker } from "./ComposerSkillPicker";
+import { composerSkillInsertion } from "./composerSkillPicker.logic";
 import { composerCommandKeyHandler } from "./composerCommandKey";
 import { usePromptSuggestion } from "./usePromptSuggestion";
 import { useFreshSessionArmed } from "./freshSessionArms";
@@ -1836,6 +1838,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     };
   };
   const readComposerSnapshotStable = useStableCallback(readComposerSnapshot);
+
+  const addComposerSkills = (names: readonly string[]) => {
+    const snapshot = readComposerSnapshot();
+    const insertion = composerSkillInsertion(snapshot.value, names, selectedProviderSkills);
+    if (!insertion) return;
+    applyPromptReplacement(snapshot.value.length, snapshot.value.length, insertion);
+  };
+  const addComposerSkillsStable = useStableCallback(addComposerSkills);
 
   const dictationDisabled =
     !canOperateThread ||
@@ -3783,6 +3793,28 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               >
                 {composerAttachButton && !dictationTakesFooter ? (
                   <div className="me-2">{composerAttachButton}</div>
+                ) : null}
+                {!dictationTakesFooter &&
+                !isComposerCollapsedMobile &&
+                !isComposerApprovalState &&
+                pendingUserInputs.length === 0 ? (
+                  <div className="me-1 shrink-0">
+                    <ComposerSkillPicker
+                      key={`${composerDraftTargetKey}:${selectedInstanceId}:${gitCwd}`}
+                      skills={selectedProviderSkills}
+                      prompt={prompt}
+                      scanning={workspaceSkillsScanning || providerCatalogPending}
+                      disabled={
+                        !canOperateThread ||
+                        projectSelectionRequired ||
+                        showProviderUnavailable ||
+                        isSendBusy ||
+                        speechInput.freezesEditor
+                      }
+                      onOpen={refreshWorkspaceSnapshotOnTyping}
+                      onAdd={addComposerSkillsStable}
+                    />
+                  </div>
                 ) : null}
                 <div
                   data-chat-composer-actions="right"
