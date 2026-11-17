@@ -1081,6 +1081,7 @@ export const layer = Layer.effect(
         Effect.map(([, nextProviders]) => nextProviders),
       );
 
+    const preparedWorkspaces = new WeakMap<ProviderInstance, Map<string, string | undefined>>();
     const refreshWorkspaceSnapshot = Effect.fn("refreshWorkspaceSnapshot")(function* (input: {
       readonly instanceId: ProviderInstanceId;
       readonly cwd: string;
@@ -1116,28 +1117,36 @@ export const layer = Layer.effect(
       }
       const providers = yield* Ref.get(providersRef);
       const provider = providers.find((candidate) => candidate.instanceId === input.instanceId);
+      if (!provider?.enabled) return providers;
+      const instance = yield* instanceRegistry.getInstance(input.instanceId);
+      const snapshotForCwd = instance?.snapshotForCwd;
+      if (!instance || !snapshotForCwd) return providers;
       const scannedFrom = workspaceSnapshotOf(provider);
+      // A report never enrolls a cwd nobody requested, nor outlives the instance that made it.
+      if (input.rescan && (input.rescan !== instance || (!runningScan && !scannedFrom))) {
+        return providers;
+      }
+      const fingerprint = yield* (
+        instance.prepareWorkspace?.(
+          input.scanCwd ?? input.cwd,
+          input.fresh === undefined ? {} : { fresh: input.fresh },
+        ) ?? Effect.undefined
+      );
+      const prepared = preparedWorkspaces.get(instance);
+      const preparationChanged = fingerprint !== prepared?.get(input.cwd);
       const now = yield* DateTime.now;
       if (
-        !provider ||
-        !provider.enabled ||
-        (!input.fresh &&
-          !input.rescan &&
-          scannedFrom &&
-          !isProviderWorkspaceSnapshotPending(scannedFrom) &&
-          isProviderWorkspaceSnapshotCurrent(scannedFrom, DateTime.toEpochMillis(now)))
+        !input.fresh &&
+        !input.rescan &&
+        !preparationChanged &&
+        scannedFrom &&
+        !isProviderWorkspaceSnapshotPending(scannedFrom) &&
+        isProviderWorkspaceSnapshotCurrent(scannedFrom, DateTime.toEpochMillis(now))
       ) {
         return providers;
       }
       // Use scan start for TTL, not checkedAt inherited from the machine health check.
       const scannedAt = DateTime.formatIso(now);
-      const instance = yield* instanceRegistry.getInstance(input.instanceId);
-      const snapshotForCwd = instance?.snapshotForCwd;
-      if (!instance || !snapshotForCwd) return providers;
-      // A report never enrolls a cwd nobody requested, nor outlives the instance that made it.
-      if (input.rescan && (input.rescan !== instance || (!runningScan && !scannedFrom))) {
-        return providers;
-      }
       const token = yield* Deferred.make<void>();
       // A machine refresh can change this cwd's snapshot, so the scan publishes against the result.
       const refreshMachineSnapshot = input.fresh
@@ -1182,6 +1191,13 @@ export const layer = Layer.effect(
                     slashCommandsPending:
                       scopedSnapshot.slashCommandsPending ?? scopedSnapshot.status === "error",
                   });
+                  const fingerprints = preparedWorkspaces.get(instance) ?? new Map();
+                  fingerprints.delete(input.cwd);
+                  fingerprints.set(input.cwd, fingerprint);
+                  if (fingerprints.size > MAX_WORKSPACE_SNAPSHOTS_PER_PROVIDER) {
+                    fingerprints.delete(fingerprints.keys().next().value!);
+                  }
+                  preparedWorkspaces.set(instance, fingerprints);
                   // Clients keep fetched snapshots, so a changed rescan must tell them to fetch again.
                   const rescanned = workspaceSnapshotOf(scanned);
                   const held = heldBeforeWait ?? scanBase;

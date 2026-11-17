@@ -28,6 +28,7 @@ import * as ProviderInstanceRegistryMutator from "./ProviderInstanceRegistryMuta
 import * as ProviderOrchestrationAdapterInfrastructure from "./ProviderOrchestrationAdapterInfrastructure.ts";
 import * as AcpRegistrySupport from "@t3tools/provider-acp-registry/server/AcpRegistrySupport";
 import * as ProviderHostLive from "./ProviderHostLive.ts";
+import * as AgentSkillsBridge from "./AgentSkillsBridge.ts";
 import type * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import type * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as ServerConfig from "../config.ts";
@@ -194,10 +195,21 @@ export const layer: Layer.Layer<
       serverSettings.managedPolicy,
       yield* HostProcess.Environment,
     );
+    const skillBridge = yield* AgentSkillsBridge.AgentSkillsBridge;
     // Instances of drivers the policy leaves out stay listed, as unavailable, so their threads
     // explain why instead of losing their provider.
     const layerMutable = ProviderInstanceRegistry.layer({
-      drivers: BUILT_IN_DRIVERS,
+      drivers: BUILT_IN_DRIVERS.map((driver) => ({
+        ...driver,
+        create: (input) =>
+          driver
+            .create(input)
+            .pipe(
+              Effect.map((instance) =>
+                AgentSkillsBridge.withAgentSkillsBridge(instance, skillBridge),
+              ),
+            ),
+      })),
       configMap: initialConfigMap,
       blockedReason: (driver) =>
         ManagedProviders.disallowedDriverReason(serverSettings.managedPolicy, driver),
@@ -213,7 +225,7 @@ export const layer: Layer.Layer<
       Layer.provideMerge(layerMutable),
     );
   }),
-) as Layer.Layer<
+).pipe(Layer.provide(AgentSkillsBridge.layer)) as Layer.Layer<
   | ProviderInstanceRegistry.ProviderInstanceRegistry
   | ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator,
   never,

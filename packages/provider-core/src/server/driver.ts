@@ -46,6 +46,11 @@ export interface ProviderInstance {
   readonly accentColor?: string | undefined;
   readonly enabled: boolean;
   readonly snapshot: ManagedServerProvider;
+  /** Prepare project resources before discovery; a changed fingerprint invalidates the workspace snapshot. */
+  readonly prepareWorkspace?: (
+    cwd: string,
+    options?: { readonly fresh?: boolean },
+  ) => Effect.Effect<string | undefined, ProviderDriverError>;
   readonly snapshotForCwd?: (
     cwd: string,
   ) => Effect.Effect<ProviderWorkspaceSnapshot, ProviderDriverError>;

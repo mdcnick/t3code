@@ -177,6 +177,9 @@ const makeWorkspaceRescanHarness = Effect.gen(function* () {
     readonly cwd: string;
     readonly result: Deferred.Deferred<ProviderWorkspaceSnapshot>;
   }>();
+  const preparation = yield* Ref.make<Effect.Effect<string | undefined, ProviderDriverError>>(
+    Effect.undefined,
+  );
   const makeInstance = Effect.gen(function* () {
     const rescans = yield* Queue.unbounded<string>();
     const reports = yield* Queue.unbounded<string>();
@@ -203,6 +206,7 @@ const makeWorkspaceRescanHarness = Effect.gen(function* () {
       workspaceRescans: Stream.fromQueue(rescans).pipe(
         Stream.tap((cwd) => Queue.offer(reports, cwd)),
       ),
+      prepareWorkspace: () => Ref.get(preparation).pipe(Effect.flatten),
       snapshotForCwd: (cwd) =>
         Effect.gen(function* () {
           const result = yield* Deferred.make<ProviderWorkspaceSnapshot>();
@@ -277,6 +281,7 @@ const makeWorkspaceRescanHarness = Effect.gen(function* () {
     changes,
     registry,
     scans,
+    preparation,
     nextScan,
     refresh,
     seed,
@@ -2510,6 +2515,38 @@ it.layer(
           ),
         );
       },
+    );
+
+    it.effect(
+      "checks project preparation before the workspace TTL and retains the catalog on failure",
+      () =>
+        Effect.gen(function* () {
+          const h = yield* makeWorkspaceRescanHarness;
+          yield* h.seed("/workspace");
+          yield* h.refresh("/workspace");
+          assert.strictEqual(yield* Queue.size(h.scans), 0);
+          yield* Ref.set(h.preparation, Effect.succeed("changed-manifest"));
+          const refresh = yield* h.refresh("/workspace").pipe(Effect.forkChild);
+          const complete = yield* h.nextScan("/workspace");
+          yield* complete("selected");
+          yield* Fiber.join(refresh);
+          assert.deepEqual(yield* h.skillsOf("/workspace"), ["selected"]);
+          yield* h.refresh("/workspace");
+          assert.strictEqual(yield* Queue.size(h.scans), 0);
+          yield* Ref.set(
+            h.preparation,
+            Effect.fail(
+              new ProviderDriverError({
+                driver: h.first.instance.driverKind,
+                instanceId: h.first.instance.instanceId,
+                detail: "Project skill preparation failed (exit).",
+              }),
+            ),
+          );
+          yield* h.refresh("/workspace");
+          assert.deepEqual(yield* h.skillsOf("/workspace"), ["selected"]);
+          assert.strictEqual(yield* Queue.size(h.scans), 0);
+        }),
     );
 
     it.effect("rescans a requested cwd whose snapshot is still current", () =>
